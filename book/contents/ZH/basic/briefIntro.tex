@@ -69,7 +69,7 @@ GPIOA->ODR = 0x01;
 		\endhead
 		
 		CRL & 0x00 & 控制寄存器，控制0～7引脚 \\
-		CRH & 0x04 & 控制寄存器，控制8~15引脚 \\
+		CRH & 0x04 & 控制寄存器，控制8～15引脚 \\
 		IDR & 0x08 & 引脚输入寄存器 \\
 		ODR & 0x0C & 引脚输出寄存器 \\
 		BSRR & 0x10 & 引脚置位（置1）寄存器 \\
@@ -80,7 +80,7 @@ GPIOA->ODR = 0x01;
 	\end{longtable}
 \end{center}
 \par 
-由于STM32是32位的单片机，因此其中的寄存器大多是32位的，即每一个寄存器占据的字节数是0x04，这与上表中的地址偏移之间的差值是一致的，从而可以发现这些寄存器的地址是连续分布的。从而，我们可以写出下面的结构体对GPIO的这几个寄存器进行抽象：
+由于STM32是32位的单片机，因此其中的寄存器大多是32位的，即每一个寄存器占据的字节数是0x04，这与上表中的地址偏移之间的差值是一致的，从而可以发现这些寄存器的地址是连续分布的。这样，我们可以写出下面的结构体对GPIO的这几个寄存器进行抽象：
 \par 
 \begin{lstlisting}[language=bash, style=customStyleC, caption=GPIO结构体, label=periphStruct]
 typedef struct GPIO_TypeDef {
