@@ -1,5 +1,5 @@
 \renewenvironment{longtable}{\rowcolors{2}{LightGray}{white}\oldlongtable} {\endoldlongtable}
-\chapter{开发环境搭建}
+\chapter{开发环境搭建与工程模板}
 \section{开发环境概述}
 编写STM32程序的过程大致可以分为3个阶段：编写代码、编译链接、下载程序。其中，编写代码是使用C语言，结合标准外设库，编制源代码的阶段，编译链接是利用编译器，将源代码编译成STM32平台的可执行文件，而下载程序是利用ST提供的接口驱动，将电脑上的可执行文件传输至STM32的Flash程序存储器中的过程。
 下面针对这3个阶段，分别介绍本文档推荐的工具。
@@ -71,12 +71,318 @@ brew install st-link
 	\end{longtable}
 \end{center}
 \par 
+下面逐一介绍各个目录和文件的内容。
+\subsection{CMSIS/}
+这个目录下放置的是与单片机核心有关的库文件，需要从标准外设库的\\STDPeriphLib/Libraries/CMSIS/CM3/中拷贝以下5个文件：
+\begin{itemize}
+	\item CoreSupport/core\_cm3.c
+	\item CoreSupport/core\_cm3.h
+	\item DeviceSupport/ST/STM32F10x/system\_stm32f10x.c
+	\item DeviceSupport/ST/STM32F10x/system\_stm32f10x.h
+	\item DeviceSupport/ST/STM32F10x/stm32f10x.h
+\end{itemize}
+\subsection{Startup/}
+这个目录下放置的是单片机的启动代码，需要从标准外设库的
+STDPeriphLib/\\Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x/startup/gcc\_ride7/
+目录下拷贝所有的文件。
+\subsection{Lib/}
+这个目录下放置的是所有外设的库文件，需要拷贝标准外设库的
+STDPeriphLib/\\Libraries/STM32F10x\_StdPeriph\_Driver/下的inc/和src/两个目录，此外，还需要创建一个名为makefile的文本文件，其内容如下：
+\begin{lstlisting}[language=bash, style=customStyleMakefile, caption=Lib/makefile]
+CC = arm-none-eabi-gcc
+AR = arm-none-eabi-ar 
+vpath %.c src ../CMSIS
+vpath %.h inc
+CFLAGS  = -g -O2 -Wall
+CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m3 -mthumb-interwork
+CFLAGS += -ffreestanding -nostdlib
+CFLAGS += -Iinc -I../CMSIS -I../User
+CFLAGS += -DUSE_STDPERIPH_DRIVER
+CFLAGS += -DSTM32F10X_MD
 
+SRCS = misc.c stm32f10x_adc.c stm32f10x_bkp.c stm32f10x_can.c \
+			stm32f10x_cec.c stm32f10x_crc.c stm32f10x_dac.c \
+			stm32f10x_dbgmcu.c stm32f10x_dma.c stm32f10x_exti.c \
+			stm32f10x_flash.c stm32f10x_fsmc.c stm32f10x_gpio.c \
+			stm32f10x_i2c.c stm32f10x_iwdg.c stm32f10x_pwr.c \
+			stm32f10x_rcc.c stm32f10x_rtc.c stm32f10x_sdio.c \
+			stm32f10x_spi.c stm32f10x_tim.c stm32f10x_usart.c \
+			stm32f10x_wwdg.c
+SRCS += core_cm3.c system_stm32f10x.c
 
+OBJS = $(SRCS:.c=.o)
 
+all: libstm32periLib.a
 
+%.o : %.c
+$(CC) $(CFLAGS) -c -o $@ $^
 
+libstm32periLib.a : $(OBJS)
+$(AR) -r $@ $(OBJS)
 
+.PHONY: clean 
+clean: 
+rm -f $(OBJS)
+\end{lstlisting}
+虽然你可能不想一个字一个字的敲这一段脚本，但是这也是作者纯手写的，所以。。。
+
+\subsection{/User}
+这个目录下放置的是开发者可以改动、添加的代码文件，一般来说，开发STM32程序需要建立和编辑的代码都在这个目录下放置。
+\par 
+初始状态下，我们需要从标准外设库中拷贝以下4个文件：
+\begin{itemize}
+	\item STDPeriphLib/Project/STM32F10x\_StdPeriph\_Template/main.c
+	\item STDPeriphLib/Project/STM32F10x\_StdPeriph\_Template/stm32f10x\_conf.h
+	\item STDPeriphLib/Project/STM32F10x\_StdPeriph\_Template/stm32f10x\_it.c
+	\item STDPeriphLib/Project/STM32F10x\_StdPeriph\_Template/stm32f10x\_it.h
+\end{itemize}
+
+\subsection{stm32\_flash.ld}
+这个文件是链接器脚本，其模板如下：
+\begin{lstlisting}[language=bash, style=customStyleMakefile, caption=stm32\_flash.ld]
+/* Entry Point */
+ENTRY(Reset_Handler)
+
+/* Highest address of the user mode stack */
+_estack = 0x20005000;    /* end of RAM */
+
+_Min_Heap_Size = 0;      /* required amount of heap  */
+_Min_Stack_Size = 0x400; /* required amount of stack */
+
+/* Memories definition */
+MEMORY
+{
+  RAM (xrw)		: ORIGIN = 0x20000000, LENGTH = 20K
+  ROM (rx)		: ORIGIN = 0x8000000, LENGTH = 64K
+}
+
+/* Sections */
+SECTIONS
+{
+  /* The startup code into ROM memory */
+  .isr_vector :
+  {
+    . = ALIGN(4);
+    KEEP(*(.isr_vector)) /* Startup code */
+    . = ALIGN(4);
+  } >ROM
+
+  /* The program code and other data into ROM memory */
+  .text :
+  {
+    . = ALIGN(4);
+    *(.text)           /* .text sections (code) */
+    *(.text*)          /* .text* sections (code) */
+    *(.glue_7)         /* glue arm to thumb code */
+    *(.glue_7t)        /* glue thumb to arm code */
+    *(.eh_frame)
+
+    KEEP (*(.init))
+    KEEP (*(.fini))
+
+    . = ALIGN(4);
+    _etext = .;        /* define a global symbols at end of code */
+    _exit = .;
+  } >ROM
+
+  /* Constant data into ROM memory*/
+  .rodata :
+  {
+    . = ALIGN(4);
+    *(.rodata)         /* .rodata sections (constants, strings, etc.) */
+    *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
+    . = ALIGN(4);
+  } >ROM
+
+  .ARM.extab   : { 
+  	. = ALIGN(4);
+  	*(.ARM.extab* .gnu.linkonce.armextab.*)
+  	. = ALIGN(4);
+  } >ROM
+  
+  .ARM : {
+    . = ALIGN(4);
+    __exidx_start = .;
+    *(.ARM.exidx*)
+    __exidx_end = .;
+    . = ALIGN(4);
+  } >ROM
+
+  .preinit_array     :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__preinit_array_start = .);
+    KEEP (*(.preinit_array*))
+    PROVIDE_HIDDEN (__preinit_array_end = .);
+    . = ALIGN(4);
+  } >ROM
+  
+  .init_array :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__init_array_start = .);
+    KEEP (*(SORT(.init_array.*)))
+    KEEP (*(.init_array*))
+    PROVIDE_HIDDEN (__init_array_end = .);
+    . = ALIGN(4);
+  } >ROM
+  
+  .fini_array :
+  {
+    . = ALIGN(4);
+    PROVIDE_HIDDEN (__fini_array_start = .);
+    KEEP (*(SORT(.fini_array.*)))
+    KEEP (*(.fini_array*))
+    PROVIDE_HIDDEN (__fini_array_end = .);
+    . = ALIGN(4);
+  } >ROM
+
+  /* Used by the startup to initialize data */
+  _sidata = LOADADDR(.data);
+
+  /* Initialized data sections into RAM memory */
+  .data : 
+  {
+    . = ALIGN(4);
+    _sdata = .;        /* create a global symbol at data start */
+    *(.data)           /* .data sections */
+    *(.data*)          /* .data* sections */
+
+    . = ALIGN(4);
+    _edata = .;        /* define a global symbol at data end */
+  } >RAM AT> ROM
+
+  /* Uninitialized data section into RAM memory */
+  . = ALIGN(4);
+  .bss :
+  {
+    /* This is used by the startup in order to initialize the .bss secion */
+    _sbss = .;         /* define a global symbol at bss start */
+    __bss_start__ = _sbss;
+    *(.bss)
+    *(.bss*)
+    *(COMMON)
+
+    . = ALIGN(4);
+    _ebss = .;         /* define a global symbol at bss end */
+    __bss_end__ = _ebss;
+  } >RAM
+
+  /* User_heap_stack section, check that there is enough RAM left */
+  ._user_heap_stack :
+  {
+    . = ALIGN(8);
+    PROVIDE ( end = . );
+    PROVIDE ( _end = . );
+    . = . + _Min_Heap_Size;
+    . = . + _Min_Stack_Size;
+    . = ALIGN(8);
+  } >RAM
+  
+  /* Remove information from the compiler libraries */
+  /DISCARD/ :
+  {
+    libc.a ( * )
+    libm.a ( * )
+    libgcc.a ( * )
+  }
+  .ARM.attributes 0 : { *(.ARM.attributes) }
+}
+\end{lstlisting}
+这个文件中绝大部分不能更改，但是针对不同型号的单片机，有以下几个部分可以改动：
+\begin{itemize}
+	\item 第13行的LENGTH值，需要与单片机RAM大小相一致
+	\item 第14行的LENGTH值，需要与单片机的FLASH大小相一致
+	\item 第5行的\_estack值，需要等于第13行ORIGIN和LENGTH相加的结果
+\end{itemize}
+
+\subsection{makefile}
+这个文件是构建工程的脚本，其模板如下：
+\begin{lstlisting}[language=bash, style=customStyleMakefile, caption=makefile]
+SRCS = main.c stm32f10x_it.c startup_stm32f10x_md.s 
+HEADERS = stm32f10x_it.h stm32f10x_conf.x
+
+########################## USER FILES BELOW ##########################
+SRCS += 
+HEADERS += 
+########################## USER FILES ABOVE ##########################
+
+PROJ_NAME = main
+
+vpath %.c User
+vpath %.a Lib
+vpath %.s Startup 
+vpath %.h User
+
+CC=arm-none-eabi-gcc
+OBJCOPY=arm-none-eabi-objcopy
+
+CFLAGS  = -g -O2 -Wall -Tstm32_flash.ld 
+CFLAGS += -mlittle-endian -mthumb -mcpu=cortex-m3 -mthumb-interwork
+CFLAGS += -DUSE_STDPERIPH_DRIVER
+CFLAGS += -DSTM32F10X_MD
+
+CFLAGS += -ILib/inc -ICMSIS -IUser -lc
+
+OBJS = $(SRCS:.c=.o)
+
+.PHONY: lib proj
+
+all: lib proj
+
+lib:
+	$(MAKE) -C Lib 
+
+proj: $(PROJ_NAME).elf
+
+$(PROJ_NAME).elf: $(SRCS)
+	$(CC) $(CFLAGS) $^ -o $@ -LLib -lstm32periLib
+	$(OBJCOPY) -O ihex $(PROJ_NAME).elf $(PROJ_NAME).hex
+	$(OBJCOPY) -O binary $(PROJ_NAME).elf $(PROJ_NAME).bin
+
+SRCS : HEADERS
+HEADERS:
+
+.PHONY: clean
+
+clean:
+	rm -f *.o *.elf *.hex *.bin
+\end{lstlisting}
+\par 
+在编写代码的同时，这个文件中也有许多地方需要同时进行更改：
+\begin{itemize}
+	\item 每添加一个C源文件，需要在第5行正确地加上这个文件的文件名（不包含路径，但包含后缀名），以空格隔开，必要时可以使用反斜线“$\backslash$”作为续行符
+	\item 每添加一个C头文件，需要在第6行正确地加上这个文件的文件名
+	\item 每创建一个将会包含C源文件的文件夹，需要在第11行正确地加上这个目录的相对路径
+	\item 每创建一个将会包含C头文件的文件夹，需要在第14行正确地加上这个目录的相对路径，并在第24行加上“-I”+目录的相对路径
+	\item 当更换单片机的型号时，需要在第22行做出相应的调整，例如，对于低密度产品，要将“MD”替换为“LD”，对于高密度产品则需要替换为“HD”
+\end{itemize}
+上面的5点注意事项尤为重要，需要牢记在心。不过，由于这些改动较为机械，本文档在接下来的叙述中将不再做出强调，而默认读者会做出正确地操作。
+\par 
+完成上面的步骤后，我们的工程模板就创建好了，以后编写一个项目时，可以直接拷贝一份工程模板作为起始。当然，不建议直接在工程模板中编写代码。
+
+\section{工程模板的编译与程序下载}
+我们的工程模板实际上是一个完备的程序，无需做出任何更改就可以编译并下载到单片机上，这一过程可以作为我们平台搭建与工程模板创建正确性的检验环节。
+\subsection{编译项目}
+首先我们需要打开终端并将当前路径切换到工程模板的根目录下，如果使用VS Code编辑器，可以打开工程模板文件夹后直接调出集成终端，无需再切换路径。在终端中，输入“make”命令，按下回车。如果没有提示任何错误信息，并且工程模板中多出来了“main.bin”等文件，说明编译过程已经成功完成了。这里得到的“main.bin”就是我们需要的二进制程序。首次执行“make”命令可能会花费较长时间，不过执行过一次之后，此后的编译过程就会变得很快。这是因为make只会对上一次编译以来发生过改动的文件重新编译。
+\subsection{下载程序}
+在macOS上，下载程序需要用到st-link软件中的st-flash程序，同样打开终端并切换到工程模板根目录下，输入下面的命令：
+\par 
+\begin{lstlisting}[language=bash, style=customStyleBashLight]
+st-flash write main.bin 0x8000000
+\end{lstlisting}
+\label{bash:download}
+\par
+如果已经将STM32通过ST Link连接上了计算机，并正确供电，那么此时程序就会写入单片机的Flash内部，只要执行上述命令时没有报错，按下单片机的复位键就可以运行程序了。当然，对于工程模板中的程序来说，并不会出现任何现象。
+\subsection{清理项目}
+由于执行make指令会产生一些没有作用的文件，如果我们想要清理这些文件，可以执行“make clean”指令。不过，这样做以后，下次编译就需要重新编译全部文件了。
+
+\section{思考与练习}
+\begin{enumerate}
+	\item 在你的计算机上搭建开发环境，创建工程模板，并完成首次编译以及程序下载。
+	\item 熟读并背诵更改makefile的注意事项。
+	\item 考察\ref{bash:download}中的命令，其中0x8000000是指程序的起始地址，结合图\ref{memoryMap}说明为什么是这个值。
+\end{enumerate}
 
 
 
