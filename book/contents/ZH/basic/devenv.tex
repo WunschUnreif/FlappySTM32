@@ -1,7 +1,76 @@
 \renewenvironment{longtable}{\rowcolors{2}{LightGray}{white}\oldlongtable} {\endoldlongtable}
 \chapter{开发环境搭建}
 \section{开发环境概述}
+编写STM32程序的过程大致可以分为3个阶段：编写代码、编译链接、下载程序。其中，编写代码是使用C语言，结合标准外设库，编制源代码的阶段，编译链接是利用编译器，将源代码编译成STM32平台的可执行文件，而下载程序是利用ST提供的接口驱动，将电脑上的可执行文件传输至STM32的Flash程序存储器中的过程。
+下面针对这3个阶段，分别介绍本文档推荐的工具。
+\paragraph{编写代码} 
+本文档推荐的代码编辑工具是微软公司推出的开源跨平台编辑器VS Code。这款编辑器拥有丰富的插件，配合这些插件可以实现对C语言很好的支持，代码补全的能力相当高，而且可以一边编写代码一边查错。此外，利用它的集成终端功能，可以在编辑器内执行命令行命令，完成编译和下载。
+\paragraph{编译链接}
+本文档推荐的编译器是arm-none-eabi-gcc， 是由GCC提供的专为ARM平台编译程序的交叉编译工具链，历史悠久，性能可靠，最重要的一点是这个编译器完全免费而且开源，使用它不必担心遭到起诉，是彻头彻尾的正版软件。相比之下，Keil、IAR等软件虽然也是STM32程序编写和编译的流行软件，但它们正版软件的价格高昂，而且打击盗版的力度较大，因此不推荐使用。
+\paragraph{下载程序}
+本文档推荐的下载程序的接口和软件为ST-Link，这是ST公司为STM32设计的下载与调试接口，只需要4根线就可以连接。此外，使用J-Link也可以完成程序下载的功能，但J-Link接口需要20线，且下载器价格较高，因此并不推荐使用。目前，ST-Link也是ST公司官方推荐的连接方式。
 
+\section{软件的安装}
+VS Code的安装方法较为简单，只需在官网上下载安装，之后安装几个与C/C++有关的插件即可。
+\par 
+arm-none-eabi-gcc可以在https://github.com/gnu-mcu-eclipse/arm-none-eabi-gcc中找到下载链接，可以下载对应操作系统编译好的版本，也可以下载源码后自行编译。如果下载的是编译好的版本，那么在解压后得到的目录下的bin文件夹中就会看到arm-none-eabi-gcc这个可执行文件。方便起见，可以将这个目录添加到系统的环境变量PATH中。对于macOS用户（部分Linux系统用户也适用），可以在终端执行
+\par 
+\begin{lstlisting}[language=bash, style=customStyleBashLight]
+nano ~/.bash_profile
+\end{lstlisting}
+\par 
+然后在文件末尾添加：
+\par 
+\begin{lstlisting}[language=bash, style=customStyleBashLight]
+export PATH="/path/to/gcc/bin:$PATH"
+\end{lstlisting}
+\par 
+保存退出后，再执行命令：
+\par 
+\begin{lstlisting}[language=bash, style=customStyleBashLight]
+source ~/.bash_profile
+\end{lstlisting}
+\par
+即可完成环境变量的改变。
+\par 
+st-link软件可以直接利用系统的包管理器安装，对于使用homebrew的macOS用户，只需在终端中执行
+\par 
+\begin{lstlisting}[language=bash, style=customStyleBashLight]
+brew install st-link
+\end{lstlisting}
+\par
+稍等片刻就完成了st-link软件的安装。
+
+\paragraph{Windows系统下相关软件安装概述}
+对于Windows系统，代码编辑器VS code和交叉编译器arm-none-eabi-gcc都有相应的版本，只需下载安装即可，而对于下载软件st-link，也可用Windows系统下功能相同的软件替代。当然，我们推荐使用正版软件。
+
+\section{建立工程模版}
+首先，假定我们已经下载了STM32F1系列的标准外设库，并且位于STDPeriphLib/目录下。接下来，我们需要新建一个目录，作为工程模板的根目录，不妨设这个目录为C8Template/。在C8Template/下，我们需要新建下列文件夹和文件：
+\begin{center}
+	\begin{longtable}[l]{| p{30mm} | p{30mm} | p{80mm} |}
+		\caption{C8Template/下的内容}\\
+		\hline 
+		\rowcolor{Gray}
+		\textbf{项目名称} & \textbf{类型} & \textbf{简要描述} \\
+		\hline
+		\endfirsthead
+		
+		\hline 
+		\rowcolor{Gray}
+		\textbf{项目名称} & \textbf{类型} & \textbf{简要描述} \\
+		\hline
+		\endhead
+		
+		CMSIS/ &  目录 & 与Cortex-M3内核有关的库文件所在目录 \\ 
+		Startup/ & 目录 & 单片机启动代码所在目录 \\
+		Lib/ & 目录 & 外设库所在目录 \\
+		User/ & 目录 & 开发者编写的代码所在目录 \\
+		makefile & 文本文件 & 构建工程的脚本 \\
+		stm32\_flash.ld & 文本文件 & gcc需要的连接器脚本 \\
+		\hline
+	\end{longtable}
+\end{center}
+\par 
 
 
 
