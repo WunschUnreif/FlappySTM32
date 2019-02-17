@@ -66,7 +66,7 @@ brew install st-link
 		Lib/ & 目录 & 外设库所在目录 \\
 		User/ & 目录 & 开发者编写的代码所在目录 \\
 		makefile & 文本文件 & 构建工程的脚本 \\
-		stm32\_flash.ld & 文本文件 & gcc需要的连接器脚本 \\
+		stm32\_flash.ld & 文本文件 & gcc需要的链接器脚本 \\
 		\hline
 	\end{longtable}
 \end{center}
@@ -126,7 +126,7 @@ rm -f $(OBJS)
 \end{lstlisting}
 虽然你可能不想一个字一个字的敲这一段脚本，但是这也是作者纯手写的，所以。。。
 
-\subsection{/User}
+\subsection{User/}
 这个目录下放置的是开发者可以改动、添加的代码文件，一般来说，开发STM32程序需要建立和编辑的代码都在这个目录下放置。
 \par 
 初始状态下，我们需要从标准外设库中拷贝以下4个文件：
