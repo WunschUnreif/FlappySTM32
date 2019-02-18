@@ -119,14 +119,128 @@ void PinsInit() {
 		函数的第2行定义了一个GPIO初始化结构体，以备之后使用。\\
 		第4行调用库函数打开了GPIOA的时钟。读者应当注意到其中APB2Periph这个短语，这表示GPIOA这个外设是属于APB2时钟线上的外设。这个结论来自于Datasheet，如图\ref{fig:clockDiag}所示。
 		\\
-		第6～9行设置PA0和PA1的模式为推挽输出（Push-Pull output)模式，最大输出频率为50MHz。
-		\begin{figure}[htbp]
+		第6～9行设置PA0和PA1的模式为推挽输出（Push-Pull)模式，最大输出频率为50MHz。这一步操作用到了GPIO\_Init(GPIO\_TypeDef*, GPIO\_InitTypeDef*)这个函数，它的第一个参数是GPIO端口，第二个参数是指向GPIO初始化结构体的指针，因此我们不需要在GPIO初始化结构体中指明具体的端口，只需配置引脚、模式以及速率。从代码中可以看出，如果要同时配置多个引脚，只需用“按位或”运算符（“|”）连接即可，当然它们必须属于同一个GPIO端口。
+		\\
+		第11～17行分别配置PA2和PA3为下拉输入（input pull-down）和上拉输入（input pull-up）模式。由于输入模式不需要指定最大速率，因此GPIO\_Speed成员不必填写。
+		\par 
+		总的来说，初始化GPIO的步骤是：首先开启所需GPIO端口的时钟，接着填写GPIO初始化结构体，并用这个结构体初始化具体的引脚。在STM32中，初始化大部分外设的步骤也都与此类似，即首先要使能对应外设的时钟，之后再使情况具体初始化外设，对于部分外设，还需要一个软件使能的过程。
+		
+		\begin{figure}[!b]
 			\includegraphics[width=\textwidth]{images/content/clockDiag.png}
 			\captionof{figure}{STM32时钟线}
 			\label{fig:clockDiag}
 		\end{figure}
+	
+	\subsection{GPIO的输出操作}
+		配置为推挽或开漏输出模式的引脚，可以控制其输出高电平或低电平，与之相关的库函数有下面几个：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC]
+/*控制整个GPIO端口的输出值*/
+void GPIO_Write(GPIO_TypeDef * GPIOx, uint16_t PortVal);
+
+/*控制某个引脚的输出值*/
+void GPIO_WriteBit(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin, 
+	BitAction BitVal );
+
+/*拉高（置位，set）某些引脚*/
+void GPIO_SetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+
+/*拉低（复位，reset）某些引脚*/
+void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+		\end{lstlisting}
+		\par 
+		其中，第1个函数改变整个端口16个引脚的输出值，因此它的第二个参数是一个16位的无符号整数，从第15位到第0位分别对应某一端口第15号引脚到第0号引脚，这种操作一般用于手工进行并行数据传输。第2个函数改变某个引脚的输出值，其第三个参数决定是拉高（对应Bit\_SET）还是拉低（对应Bit\_RESET），不过这个函数只能操作某一个引脚。后两个函数分别拉高、拉低某些引脚，第二个参数为用按位或运算符连接的若干引脚，当然，控制单个引脚也是可以的。
+		\par 
+		下面，我们看看如何用这些函数来控制GPIO完成点亮LED灯的操作。以下两个函数位于GPIO.c文件中。
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=LED控制操作]
+void LED1Operation(u8 on) {
+	if(on) {
+		GPIO_ResetBits(GPIOA, GPIO_Pin_0);
+	} else {
+		GPIO_SetBits(GPIOA, GPIO_Pin_0);
+	}
+}
+
+void LED2Operation(u8 on) {
+	GPIO_WriteBit(GPIOA, GPIO_Pin_1, on ? Bit_RESET : Bit_SET);
+}
+		\end{lstlisting}
+		\par 
+		这里，控制LED1的函数用了直接拉高、拉低引脚的库函数，而控制LED2的函数则使用了写入某一引脚的库函数。需要注意，也许有的读者知道Bit\_SET和Bit\_RESET的值（分别为1和0）之后会想到把上述代码第10行的三元表达式替换为1 - on甚至是1 \^{} on（位异或运算），但实际上，我们使用了8位整型来表达布尔类型，因此任何非零值都应理解为真，如果做出这样的替换，就相当于限制了参只能传入0或1。有时为了较高的性能我们确实会这么做，但一般来说，这是不建议的。
 		
+	\subsection{GPIO的读入操作}
+		配置为浮空输入、上拉输入或者下拉输入模式的引脚，可以读取输入的电平高低，与之相关的库函数有下面几个：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC]
+/*读取某个引脚上的输入电平*/
+uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+
+/*读取整个GPIO端口的输入值*/
+uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
+		\end{lstlisting}
+		\par 
+		第一个函数读取某个引脚上的输入电平，高电平返回Bit\_SET，低电平返回Bit\_RESET。第二个函数读取整个GPIO端口的输入数据，返回一个16位无符号数，从第15位到第0位分别对应某一端口第15号引脚到第0号引脚上的输入电平。
+		\par 
+		下面我们看看如何用这些函数检测按键是否被按下了。
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=按键检测]
+u8 Button1Pressing() {
+	return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == Bit_SET;
+}
+
+u8 Button2Pressing() {
+	return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_3) == Bit_RESET;
+}
+		\end{lstlisting}
+		\par 
+		函数的功能简明易懂，但这样，能够完美地实现检测按键的功能吗？
 		
+	\subsection{按键的抖动}
+		由于按键是一种机械结构触发的电子开关，当人手按下按键时，相应信号并不会立即跳变，而是会迅速发生几次跳变，而后稳定下来，当松开按键时，也会发生同样的情况，这就是按键的抖动，形象的描述见图\ref{fig:keyShake}\footnote{http://mooc.chaoxing.com/nodedetailcontroller/visitnodedetail?knowledgeId=630317}。这种抖动可能是我们重复检测到按键按下的事件，甚至在松开按键的过程中也会这样，因此，必须想办法消除这种影响。
+		\begin{figure}[h]
+			\begin{center}
+				\includegraphics[width=110mm]{images/content/keyShake.jpg}
+				\captionof{figure}{按键抖动}
+				\label{fig:keyShake}
+			\end{center}
+		\end{figure}
+		\par 
+		我们可以使用一些数字电路来消除这种抖动带来的影响，但这样过于复杂。我们也可以用软件的方式来实现同样的目的，即检测到电平变换后，延时一定时间（例如50ms），再检测一遍，如果仍为按下状态，则认为按键已经按下，否则认为没有按下。但在此之前，让我们想想如何进行延时的操作，要知道，单片机里可没有<time.h>之类的操作。
+	
+	\subsection{循环的延时作用}
+	想要延时，最简单的方法是让程序执行相当多次什么也不干的循环。经过几次调参，一个简易的延时函数如下所示：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=简易延时函数]
+void delay(volatile uint32_t ms) {
+	volatile uint32_t i, j;
+	for(i = 0; i < 6000; ++i) {
+		for(j = 0; j < ms; ++j);
+	}
+}
+		\end{lstlisting}
+		\par 
+		一个优秀的编译器在吸了氧气（指开启-O2优化）之后可能会把空循环甚至幂等的循环（即循环一次与循环多次等价）直接优化掉，因此我们一定要声明变量为volatile的。有了这个延时函数，我们就可以解决按键抖动问题了。
+	
+	\subsection{消抖后的按键检测}
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=消抖后的按键检测函数]
+u8 Button1Pressing() {
+	if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == Bit_SET) {
+		delay(50);
+		return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_2) == Bit_SET;
+	} else return 0;
+}
+
+u8 Button2Pressing() {
+	if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_3) == Bit_RESET) {
+		delay(50);
+		return GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_3) == Bit_RESET;
+	} else return 0;
+}
+		\end{lstlisting}
+		\par 
+		上面这两个函数的实现思路与之前的分析一致，使用延时的方法来消除抖动的影响。
 
 
 
