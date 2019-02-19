@@ -65,6 +65,7 @@ GPIO支持的模式见下表：
 		PA3 & 按钮（另一侧接0V） & 上拉输入 \\
 		
 		\hline
+		\label{chart:exampal1}
 	\end{longtable}
 \end{center}
 \par 
@@ -261,7 +262,52 @@ int main(void) {
 		\newpage
 		\par 
 		程序首先调用初始化函数对用到的引脚进行初始化，然后将LED2熄灭，此后进入一个无限循环，在这个循环中，以大约1秒为周期交替点亮、熄灭LED1。如果编译并下载这个程序，正确地连接电路，我们就可以看到LED闪烁的效果了。这里我们使用的delay()函数与之前实现的一样。
+		\par 
+		此外，流水灯、按键控制灯亮灭的程序也都比较平凡，所以下面直接给出。
+		\par
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=流水灯]
+int main(void)
+{
+	PinsInit();
+	
+	u8 on = 1;    
+	while(1) {
+		LED1Operation(on); LED2Operation(!on);
+		delay(500);
+		on = !on;
+	}
+}
+		\end{lstlisting}
+		\par 
 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=按钮控制亮灭]
+int main(void)
+{
+	PinsInit();
+	
+	while(1) {
+		LED1Operation(Button1Pressing());
+		LED2Operation(Button2Pressing());
+	}
+}
+		\end{lstlisting}
+		\par 
+		
+		说一些题外话，在流水灯的实现代码中，我们用u8类型作布尔类型，而后又对其进行了逻辑非运算，这一操作的具体行为其实与变量on的初值有关，在这里，我们初始化on为1，那么我们采用的编译器会把这个逻辑非操作实现为异或运算，即把on = !on实现为on = 1 \^{} on，然而，如果我们初始化on为其他值，例如10，那么编译器会用逻辑右移运算来实现逻辑非，得到的变换序列为10$\rightarrow$0$\rightarrow$1$\rightarrow$0$\rightarrow$1$\rightarrow$$\cdots$。如果取别的值，也许编译器会实现出其他行为，有兴趣的读者可以用gcc的命令行参数-S生成汇编代码来一探究竟。
+
+\section{中断}
+在前面的按钮控制亮灭程序中，读者容易发现，我们的程序一直都在检测按钮是否按下，但事实上我们可以认为使用者并不会花很长时间按按钮，所以这种实现（称为轮询检测，polling）很浪费CPU资源。在实际的飞行控制应用中，按钮可能被一些传感器的信号线代替，如果两次轮询之间的间隔选择得不合适，很有可能错过一些信息，造成意外。为此，绝大多数CPU都提供一种叫做中断的机制，让CPU可以被某些事件打断，进入处理相应事件的状态，而不必再轮询检测事件是否发生，这使得CPU的控制逻辑更加丰富。
+\begin{figure}[h]
+	\begin{center}
+		\includegraphics{images/content/interrupt.png}
+		\captionof{figure}{中断处理流程}
+		\label{fig:interrupt}
+	\end{center}
+\end{figure}
+\par 
+中断处理的过程如上图所示，当主线程序执行时，如果发生引发中断的事件，则CPU立即执行相应的中断处理程序，结束以后再回到主线程序，继续运行。事实上，中断程序也会被中断所打断，因此，STM32的CPU引入了优先级机制，只有高优先级的中断才能打断低优先级或同级的中断处理程序，这种中断嵌套的机制是由CPU中一个叫做嵌套向量中断控制器（\ac{NVIC}）的核心外设提供的。由于处理中断要保存程序计数器等寄存器的状态，就需要用到栈空间，因此中断的嵌套有一定限度，为避免超过这个限度，一方面要合理设置中断的优先级，另一方面要在程序上保证一个中断不会在处理过程中再次触发，形成无限递归。STM32中的许多外设都可以作为中断的来源。
+
+\section{GPIO的中断操作——\acs{EXTI}}
 
 
 
