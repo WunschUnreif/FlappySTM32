@@ -46,7 +46,7 @@ GPIO支持的模式见下表：
 在STM32中，使用一个外设必须首先完成初始化操作，包括初始化对应的外设模块，打开对应的时钟信号，某些外设还要求产生软件启动指令才能正常工作。我们假设目前的场景下，单片机连接的外部元件如下表所示：
 \begin{center}
 	\begin{longtable}[l]{| p{20mm} | p{80mm} | p{40mm} |}
-		\caption{单片机引脚定义}\\
+		\caption{单片机引脚定义}	\label{chart:exampal1}\\
 		\hline 
 		\rowcolor{Gray}
 		\textbf{引脚} & \textbf{连接的元件} & \textbf{需要使用的模式} \\
@@ -62,10 +62,9 @@ GPIO支持的模式见下表：
 		PA0 & LED灯（另一侧通过限流电阻接3.3V）  & 推挽输出 \\
 		PA1 & LED灯（另一侧通过限流电阻接3.3V）  & 推挽输出 \\
 		PA2 & 按钮（另一侧接3.3V） & 下拉输入 \\
-		PA3 & 按钮（另一侧接0V） & 上拉输入 \\
+		PA3 & 按钮（另一侧接0V） & 上拉输入\\
 		
 		\hline
-		\label{chart:exampal1}
 	\end{longtable}
 \end{center}
 \par 
