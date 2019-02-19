@@ -23,7 +23,7 @@ STM32是指意法半导体（STMicroelectronics）制造的一系列32位ARM架�
 \subsection{程序的本质是什么}
 程序的本质，当然是计算，毕竟程序是为“计算机”设计的。计算，可以认为是程序唯一的本质，CPU的所有行为不过是从存储介质中取得运算数，按程序对其计算，再将结果写入规定的存储介质中。可是这样，单片机是如何完成各种强大的控制功能的呢？这些功能，实际上是通过逻辑电路来实现的，CPU将控制这些逻辑电路的参数写入规定好的寄存器中，就可以告诉相应的逻辑电路该产生什么行为，除非遭遇了宇宙射线什么的，否则这些逻辑器件总是会乖乖听话。这就是单片机控制功能的来源。
 \par 
-不如举个例子，查阅STM32的参考手册\footnote{https://www.st.com/resource/en/reference\_manual/cd00171190.pdf}（\ac{RM}），可以知道GPIO这个外设有一个寄存器叫做“ODR (Port output data register)”，可以控制GPIO的输出电平，如下图：
+不如举个例子，查阅STM32的参考手册\footnote{https://www.st.com/resource/en/reference\_manual/cd00171190.pdf}（\ac{RM}），可以知道GPIO这个外设有一个寄存器叫做“ODR (Port output data register)”，可以控制GPIO的输出电平，这个寄存器每个二进制位的意义如下图：
 \par 
 \begin{figure}[h]
 	\includegraphics[width=\textwidth]{images/content/ODR.png}

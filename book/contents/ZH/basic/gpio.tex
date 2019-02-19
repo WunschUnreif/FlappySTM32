@@ -197,7 +197,7 @@ u8 Button2Pressing() {
 		函数的功能简明易懂，但这样，能够完美地实现检测按键的功能吗？
 		
 	\subsection{按键的抖动}
-		由于按键是一种机械结构触发的电子开关，当人手按下按键时，相应信号并不会立即跳变，而是会迅速发生几次跳变，而后稳定下来，当松开按键时，也会发生同样的情况，这就是按键的抖动，形象的描述见图\ref{fig:keyShake}\footnote{http://mooc.chaoxing.com/nodedetailcontroller/visitnodedetail?knowledgeId=630317}。这种抖动可能是我们重复检测到按键按下的事件，甚至在松开按键的过程中也会这样，因此，必须想办法消除这种影响。
+		由于按键是一种机械结构触发的电子开关，当人手按下按键时，相应信号并不会立即跳变，而是会迅速发生几次跳变，而后稳定下来，当松开按键时，也会发生同样的情况，这就是按键的抖动，形象的描述见图\ref{fig:keyShake}\footnote{http://mooc.chaoxing.com/nodedetailcontroller/visitnodedetail?knowledgeId=630317}。这种抖动可能使我们重复检测到按键按下的事件，甚至在松开按键的过程中也会这样，因此，必须想办法消除这种影响。
 		\begin{figure}[h]
 			\begin{center}
 				\includegraphics[width=110mm]{images/content/keyShake.jpg}
@@ -241,7 +241,26 @@ u8 Button2Pressing() {
 		\end{lstlisting}
 		\par 
 		上面这两个函数的实现思路与之前的分析一致，使用延时的方法来消除抖动的影响。
-
+		\par 
+		至此，我们已经实现了LED灯的控制以及按键检测的功能，下面，我们就可以用这些函数来实现各种各样的效果了。
+	\subsection{功能的实现}
+		想要实现我们希望的功能，需要编辑main.c文件，这是程序的入口main()函数所在的位置。我们需要将程序的逻辑写在main()函数内部。不过，在编辑main()函数之前，我们需要在文件开头包含刚刚编写的GPIO.h头文件。
+		\par
+		首先，让我们看看实现一个LED灯闪烁功能的程序：
+		\par
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=LED灯闪烁]
+int main(void) {
+	PinsInit();
+	LED2Operation(0);
+	while(1) {
+		LED1Operation(1); delay(500);
+		LED1Operation(0); delay(500);
+	}
+}
+		\end{lstlisting}
+		\newpage
+		\par 
+		程序首先调用初始化函数对用到的引脚进行初始化，然后将LED2熄灭，此后进入一个无限循环，在这个循环中，以大约1秒为周期交替点亮、熄灭LED1。如果编译并下载这个程序，正确地连接电路，我们就可以看到LED闪烁的效果了。这里我们使用的delay()函数与之前实现的一样。
 
 
 
