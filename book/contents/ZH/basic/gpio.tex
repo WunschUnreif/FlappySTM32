@@ -307,6 +307,78 @@ int main(void)
 中断处理的过程如上图所示，当主线程序执行时，如果发生引发中断的事件，则CPU立即执行相应的中断处理程序，结束以后再回到主线程序，继续运行。事实上，中断程序也会被中断所打断，因此，STM32的CPU引入了优先级机制，只有高优先级的中断才能打断低优先级或同级的中断处理程序，这种中断嵌套的机制是由CPU中一个叫做嵌套向量中断控制器（\ac{NVIC}）的核心外设提供的。由于处理中断要保存程序计数器等寄存器的状态，就需要用到栈空间，因此中断的嵌套有一定限度，为避免超过这个限度，一方面要合理设置中断的优先级，另一方面要在程序上保证一个中断不会在处理过程中再次触发，形成无限递归。STM32中的许多外设都可以作为中断的来源。
 
 \section{GPIO的中断操作——\acs{EXTI}}
+STM32为我们提供了来自GPIO的中断处理机制，这是由EXTI管理的，EXTI共有16条中断信号线，分别对应每个GPIO端口的16个引脚，换句话说，我们可以把PA0的中断信号配置到EXTI0上，但不能配置到EXTI1上，而且与此同时，PB0就不能配置中断信号了。与我们之前检测按钮连接引脚的输入电平不同，EXTI检测的是信号边沿，所以我们可以要求某个引脚在上升沿和/或下降沿时触发中断信号。另一个值得注意的地方是，EXTI0～EXTI15并不是分别对应着16个不同的中断处理函数，实际的情况是EXTI0～4分别占据5个中断，EXTI5～9共享一个中断，而EXTI10～15共享另一个中断，这种情况下一般要在共享的中断处理函数中检测是哪一个引脚触发了事件。
+\par 
+下面，让我们用中断的方式重新实现之前的按钮控制LED灯的实验。
+
+	\subsection{EXTI中断的配置}
+		要配置EXTI中断，我们需要打开AFIO的时钟（因为EXTI也是GPIO的复用功能），配置GPIO的EXTI功能，初始化EXTI和NVIC。不妨把这些操作抽象成一个函数，放在GPIO.c文件中：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=EXTI配置]
+static void InterruptInit() {
+	EXTI_InitTypeDef extiInitStruct;
+	NVIC_InitTypeDef nvicInitStruct;
+	
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+	
+	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource2);
+	GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource3);
+	
+	NVIC_SetPriorityGrouping(NVIC_PriorityGroup_1);
+	
+	extiInitStruct.EXTI_Line = EXTI_Line2 | EXTI_Line3;
+	extiInitStruct.EXTI_LineCmd = ENABLE;
+	extiInitStruct.EXTI_Mode = EXTI_Mode_Interrupt;
+	extiInitStruct.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+	EXTI_Init(&extiInitStruct);
+	
+	nvicInitStruct.NVIC_IRQChannel = EXTI2_IRQn;
+	nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+	nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 0;
+	nvicInitStruct.NVIC_IRQChannelSubPriority = 0;
+	NVIC_Init(&nvicInitStruct);
+	
+	nvicInitStruct.NVIC_IRQChannel = EXTI3_IRQn;
+	nvicInitStruct.NVIC_IRQChannelCmd = ENABLE;
+	nvicInitStruct.NVIC_IRQChannelPreemptionPriority = 1;
+	nvicInitStruct.NVIC_IRQChannelSubPriority = 0;
+	NVIC_Init(&nvicInitStruct);
+}
+		\end{lstlisting}
+		\par 
+		函数中首先定义了EXTI和NVIC的初始化结构体，然后打开了AFIO的时钟。这些是常规操作。
+		\par 
+		第7行和第8行分别配置EXTI2和EXTI3的信号来源为GPIOA，或者说，把PA2和PA3连接到EXTI2和EXTI3上。需要指出的是，这个配置操作的寄存器是属于GPIO的，因此调用的函数前缀是GPIO，而不是EXTI。
+		\par 
+		第10行，设置了NVIC的优先级组分配策略。STM32的中断优先级有4个二进制位来描述，这4个位可以进一步划分为抢占优先级和响应优先级。抢占优先级高的中断可以打断抢占优先级低的中断，但相同抢占优先级的中断不可以相互打断，不过抢占优先级相同时，如果两个中断同时发生，那么响应优先级高的中断先执行，当然，优先级完全相同的中断则是按发生时间先后执行。至于在4个位中，抢占优先级占多少位，则是由开发者决定的，例如在这里，我们位抢占优先级分配了1位的空间，即NVIC\_PriorityGroup\_1。
+		\par 
+		第12～16行配置了EXTI2和EXTI3的具体行为，使能了这两条线的中断触发，配置模式为中断模式（而不是事件模式，即可以引发其他外设做出动作），并把触发边沿设置为既检测上升沿，又检测下降沿，这是因为我们既需要知道按钮按下，又需要知道按钮松开。
+		\par 
+		第18～22行和第24～28行告诉NVIC去设置EXTI2和3的中断优先级，同时使能两个中断。其中的EXTI2\_IRQn和EXTI3\_IRQn是两个中断的中断号，由外设库预定义好。可以看出，我们为EXTI2设置的抢占优先级为0，为EXTI3设置的抢占优先级为1，两者的响应优先级相同。要注意，数字越小意味着优先级越高。
+		\par 
+		这样一来中断就配置完成了，不要忘记在PinsInit()函数的最后调用这个函数。
+		
+	\subsection{EXTI中断处理函数}
+		完成了中断的配置，我们还需要实现相应的中断处理函数，否则中断发生时会进入默认的处理函数——死循环中。按照习惯，中断处理函数需要放在工程目录中的User/stm32f10x\_it.c中，并在User/stm32f10x\_it.h中给出声明。
+		\par 
+		首先我们需要在stm32f10x\_it.c中引入"GPIO.h"这个头文件，以完成对LED的控制。然后，需要在文件中添加下面这两个函数：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=中断处理函数]
+void EXTI2_IRQHandler() {
+	if(EXTI_GetITStatus(EXTI_Line2) == SET) {
+		LED1Operation(Button1Pressing());
+		EXTI_ClearITPendingBit(EXTI_Line2);
+	}
+}
+
+void EXTI3_IRQHandler() {
+	if(EXTI_GetITStatus(EXTI_Line3) == SET) {
+		LED2Operation(Button2Pressing());
+		EXTI_ClearITPendingBit(EXTI_Line3);
+	}
+}
+		\end{lstlisting}
+		\par 
 
 
 
