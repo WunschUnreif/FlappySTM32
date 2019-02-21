@@ -379,7 +379,49 @@ void EXTI3_IRQHandler() {
 }
 		\end{lstlisting}
 		\par 
+		代码的内容先按下不表，这两个函数最为重要的是它们的名字，为了指明它们是相应的中断处理函数，它们的名字必须按照规定好的来书写，而这是在启动代码Startup/startup\_stm32f10x\_md.s中定义的，具体的语句如下：
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC]
+/*摘自第145行*/
+	.word	FLASH_IRQHandler
+	.word	RCC_IRQHandler
+	.word	EXTI0_IRQHandler
+	.word	EXTI1_IRQHandler
+	.word	EXTI2_IRQHandler
+	.word	EXTI3_IRQHandler
+	.word	EXTI4_IRQHandler
+		\end{lstlisting}
+		\par 
+		这里用汇编语言定义了中断向量表，规定了函数的名字，因此我们写的中断处理函数必须与这里规定的名字完全一致，否则就无法被gcc正确链接，从而无法被NVIC调用。
+		\par
+		再来看函数具体的内容，首先我们获取相应EXTI线的中断标志位，判断中断是否确实发生。事实上这一步并不一定是必须的，因为我们的中断函数几乎不可能在其他情况下触发，这种操作更重要的应用场景是多个中断共享一个处理函数时用于判断具体是哪个事件触发了中断。接下来读取按键的状态并控制LED。对于按钮来说，这里最好再加一个短暂的延时，等待状态稳定，但如果信号来自于可靠的电子设备，则一般不用等待。最后，我们用软件的方式清除对应EXTI线的中断等待标志位（pending bit），防止中断再次触发。这个标志位并不会由硬件清除，所以务必要在代码中完成。
+	\subsection{主程序}
+		下面是main.c中的主函数内容。
+		\par 
+		\begin{lstlisting}[language=bash, style=customStyleC, caption=主程序]
+int main(void)
+{
+	PinsInit();
+	
+	while(1);
+}
+		\end{lstlisting}
+		\par 
+		事实上，主函数在完成初始化工作以后，就没有什么需要做的了，为了防止程序跑飞（因为main返回以后单片机的行为是难以确定的），所以在最后要加上一个死循环。这时，中断来了就会执行对应的程序了。
 
+\section{思考与练习}
+\begin{enumerate}
+	\item 使用一个外设之前大致要完成哪些工作？
+	\item 查阅资料，分析推挽输出和开漏输出之间的区别。
+	\item 与GPIO的输入输出相关的函数有哪些？它们各有什么用法？注意，文档中列举的函数不一定全面，你需要查阅标准外设库的帮助文档。
+	\item 按键软件消抖的原理是什么？
+	\item 中断检测和轮询检测有什么区别？以GPIO为对象，比较两者的优劣。
+	\item STM32中，中断的优先级是如何决定中断发生的顺序的？
+	\item 用轮询检测设计一个多人抢答器。
+	\item 用中断检测重新完成上一题，你能否感受出区别？注意，有人抢答以后，其他人再抢答将不做出响应。
+	\item 设计一个三人表决器，即两人及以上通过时显示通过。
+	\item 尝试学习IIC协议，用本章的GPIO操作和简易延时函数模拟IIC协议，与MPU6050等器件进行通信，将获取的数据用某种方法显示出来，例如用数码管。注意选取合适的GPIO模式。
+\end{enumerate}
 
 
 
