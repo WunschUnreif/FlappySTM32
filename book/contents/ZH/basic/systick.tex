@@ -35,7 +35,7 @@ extern volatile uint32_t millis;
 	\subsection{SysTick初始化}
 	SysTick的初始化函数实现如下：
 	\par 
-	\begin{lstlisting}[language=bash, style=customStyleC, caption=SysTick.h]
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=SysTickInit函数]
 void SysTickInit() {
 	if(SysTick_Config(SystemCoreClock / 1000)) {
 		while(1);
@@ -43,7 +43,106 @@ void SysTickInit() {
 }
 	\end{lstlisting}
 	\par 
-	可以看到，其初始化工作非常简单，只需调用SysTick\_Config()这个函数即可。其参数为SysTick计数器的初值，意义是经过这么多次时钟脉冲之后会触发中断。此外，这个函数的调用会配置SysTick中断的优先级为最低的可能值，及15（或0xF），其原因与操作系统的调度有一定关系，在这里不过多解释。默认情况下，SysTick的时钟脉冲频率为72MHz，这也是SystemCoreClock这个宏展开后的值（即72000000），所以，配置计数器初值为SystemCoreClock / 1000即可使SysTick以1ms为周期触发中断。当然，在1ms内STM32大概能够执行$10^4$条指令，因此几乎无需担心SysTick中断不能在这段时间内处理完成。如果配置成功，调用SysTick\_Config()会返回0，否则返回非零值，因此我们需要判断这个返回值是多少，并在初始化失败的情况下让程序陷入死循环。这是因为SysTick是一个非常基本的器件，初始化失败往往意味着许多功能无法完成，甚至可能暗示芯片存在其他重大问题。
+	可以看到，其初始化工作非常简单，只需调用SysTick\_Config()这个函数即可。其参数为SysTick计数器的初值，意义是经过这么多次时钟脉冲之后会触发中断。此外，这个函数的调用会配置SysTick中断的优先级为最低的可能值，即15（或0xF），其原因与操作系统的调度有一定关系，在这里不过多解释。默认情况下，SysTick的时钟脉冲频率为72MHz，这也是SystemCoreClock这个宏展开后的值（即72000000），所以，配置计数器初值为SystemCoreClock / 1000即可使SysTick以1ms为周期触发中断。当然，在1ms内STM32大概能够执行$10^4$条指令，因此几乎无需担心SysTick中断不能在这段时间内处理完成。如果配置成功，调用SysTick\_Config()会返回0，否则返回非零值，因此我们需要判断这个返回值是多少，并在初始化失败的情况下让程序陷入死循环。这是因为SysTick是一个非常基本的器件，初始化失败往往意味着许多功能无法完成，甚至可能暗示芯片存在其他重大问题。
+	
+	\subsection{SysTick中断处理}
+	由于SysTick中断服务函数位于stm32f10x\_it.c中，而我们希望将控制流转入OnSysTick()函数当中，为此，需要在stm32f10x\_it.c中包含头文件SysTick.h，然后在SysTick\_Handler中调用OnSysTick()函数：
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=SysTick\_Handler函数]
+void SysTick_Handler(void)
+{
+	OnSysTick();
+}
+	\end{lstlisting}
+	\par 
+	由于SysTick是一个Cortex M3提供的外设，其中断也属于内核，因此在stm32f10x\_it.c中，这个函数的定义可能已经存在，只不过默认情况下其中并没有任何语句。
+	\par 
+	将中断的控制流转向OnSysTick()函数后，就需要考虑其中该实现怎样的功能。我们希望，每次中断时，能够更新当前经过的毫秒数（增加1），并更新用于延时的计数器（减少1）。所以首先，我们需要在SysTick.c中定义变量millis用于计时，并且定义一个文件私有（可以用static）的变量用于延时：
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=用到的全局变量]
+volatile uint32_t millis = 0;
+static volatile uint32_t timerForDelay = 0;
+	\end{lstlisting}
+	\par 
+	需要注意volatile的使用，因为这两个变量是在中断时更新的，因此不能让编译器做出任何优化。接下来，只需要在OnSysTick()函数中更新它们的值即可。
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=OnSysTick函数]
+void OnSysTick() {
+	++millis;
+	if(timerForDelay) timerForDelay--;
+}
+	\end{lstlisting}
+	\par 
+	要注意的是，只有在延时计数器非零时，我们才去更新它的值。利用这个变量，我们就可以写出延时函数了。
+	
+	\subsection{利用SysTick延时}
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=延时函数]
+void DelayUsingSysTick(uint32_t ms) {
+	timerForDelay = ms;
+	while(timerForDelay);
+}
+	\end{lstlisting}
+	\par 
+	函数的操作很简单，设置延时计数器的值，然后等待它递减到0即可。
+	\par 
+	这个函数虽然用起来很方便，也更精确，但是，使用时有一些需要小心的地方。由于函数利用了SysTick中断，而如前文所述，初始化SysTick的时候其中断的优先级会被默认设置为最低，因此绝不能在其他中断处理程序中使用这个中断函数。当然，也正因此，如果SysTick中断发生时，单片机正在处理其他中断，那么SysTick中断的处理将被延后，这也会引来计时的误差。
+
+\section{应用举例}
+	下面我们用SysTick计时器的延时函数来重写上一章的部分例程。这些程序应写在main.c中，要注意包含SysTick.h头文件。
+	\subsection{LED灯闪烁}
+	完成LED灯闪烁的任务的主函数内容如下：
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=LED闪烁]
+int main(void)
+{
+	PinsInit();
+	SysTickInit();
+	
+	while(1) {
+		LED1Operation(1);
+		DelayUsingSysTick(500);
+		LED1Operation(0);
+		DelayUsingSysTick(500);
+	}
+}
+	\end{lstlisting}
+	\par 
+	这段程序的内容并没有什么需要解释的，下载到单片机上，将观察到LED以1Hz的频率不断闪烁。当然，这个功能也可以利用millis变量来实现。
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=用millis实现LED闪烁]
+int main(void)
+{
+	PinsInit();
+	SysTickInit();
+	
+	u8 on = 1;
+	while(1) {
+		LED1Operation(on);
+		while(millis % 500 != 0);
+		on = !on;
+	}
+}
+	\end{lstlisting}
+	\par 
+
+\section{小结}
+总的来说，SysTick是一个非常简单的外设，当然其功能也较为单一，但是，SysTick的中断信号对于操作系统实现任务调度来说是至关重要的。我们知道STM32的内部只有一个CPU，因此只能同时运行一个进程，但是，我们仍然可以在其上编写多任务操作系统，原理就是以较高的频率在不同任务之间来回切换，造成多线程的表象。例如，时间片轮换是完成这种任务调度的最简单的方法，而它的核心代码其实只有300行左右。因此，操作系统并不一定是人们想象中那么复杂。随着你的水平不断提高，也许你也可以自己动手写操作系统。
+
+\section{思考与练习}
+\begin{enumerate}
+	\item SysTick定时器的计数初值最大为多少？
+	\item 如果SysTick的时钟频率为72MHz，那么可以配置的最长中断周期为多少？
+	\item 是否可以在任何地方运行依赖SysTick的延时函数？有什么限制？
+	\item 对于SysTick的中断处理函数，有什么运行时间的要求？
+	\item 为SysTick模块添加全局变量seconds、minutes、hours，分别用于记录秒数、分钟和小时数，并在OnSysTick函数中正确地更新它们的值。指出它们加上millis这4个变量分别经过多久之后会发生溢出？设计程序使millis溢出时不影响seconds、minutes、hours的正确更新。
+	\item 利用上一题实现的变量，制作一个数字时钟，可以用数码管作为显示设备。观察它的走时是否准确。尝试设计按钮，用于调整时间。
+\end{enumerate}
+
+
+
+
+
 
 
 
