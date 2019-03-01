@@ -1,12 +1,49 @@
 \renewenvironment{longtable}{\rowcolors{2}{LightGray}{white}\oldlongtable} {\endoldlongtable}
 \chapter{SysTick定时器}
 
+在上一章中，我们使用了循环的方式来进行延时，这种方法虽然易于编程，但是精度并不高，循环次数的确定并没有一种有效而又准确的方法。因此，对于时间精度要求较高的场合，我们应当考虑利用硬件资源来完成功能，毕竟，STM32外部的晶体振荡器的频率是相当精确的。
 
+\section{SysTick概览}
+Systick又叫系统滴答定时器，是包含在Cortex M3内核当中的一个核心外设。也就是说，这个器件与具体的芯片种类是无关的，只要使用了Cortex M3内核，就一定有这个外设。当然，也正因为SysTick要满足这种普适性，它并没有太多的功能，只是一个24位递减计时器。这意味着SysTick以一定的频率进行递减计数，当数到0时，它可以产生一个中断，同时自动重新填入计数初值，开始下一轮计数。当然，这个初值最大只能是$2^{24}-1$。
+\par 
+利用SysTick计数的特性，我们可以方便地实现延时、获取芯片运行时间等。在实时操作系统中，它还可以用来产生一个信号，让操作系统可以执行进程切换，实际上，这才是SysTick的最主要作用。
+\par 
+不过，在飞行控制中，我们通常不需要编写操作系统，所以下面我们还是利用SysTick来完成最基本的计时操作，重新实现上一章的延时函数，并完成一些额外功能。请注意，如无特殊说明，本部分的每一章都将沿用前几章的工作，包括引脚功能的约定、编写的程序文件等，也就是说，在这里我们沿用上一章中GPIO的相关函数。
 
+\section{SysTick使用}
+	\subsection{预备工作}
+	这一部分的程序将写在User/文件夹下的SysTick.c和SysTick.h两个文件中。首先看一看头文件SysTick.h中的内容：
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=SysTick.h]
+#ifndef __SYSTICK__H__
+#define __SYSTICK__H__
 
+#include "stm32f10x.h" 
+#include "stm32f10x_conf.h" 
 
+void SysTickInit();
+void DelayUsingSysTick(uint32_t ms);
+void OnSysTick();
 
+extern volatile uint32_t millis;
 
+#endif
+	\end{lstlisting}
+	\par 
+	可以看到，文件中声明了三个函数、一个变量，其中，SysTickInit()负责初始化SysTick定时器，使其每1ms产生一次中断；DelayUsingSysTick(uint32\_t ms)使用SysTick定时器进行延时，单位为ms；OnSysTick()为SysTick中断发生时的处理函数，我们将在SysTick的中断服务程序中调用这个函数。变量millis负责记录系统运行至今经过的毫秒数，它需要在SysTick.c文件中进行定义。下面，我们首先了解一下SysTick的初始化。
+	
+	\subsection{SysTick初始化}
+	SysTick的初始化函数实现如下：
+	\par 
+	\begin{lstlisting}[language=bash, style=customStyleC, caption=SysTick.h]
+void SysTickInit() {
+	if(SysTick_Config(SystemCoreClock / 1000)) {
+		while(1);
+	}
+}
+	\end{lstlisting}
+	\par 
+	可以看到，其初始化工作非常简单，只需调用SysTick\_Config()这个函数即可。其参数为SysTick计数器的初值，意义是经过这么多次时钟脉冲之后会触发中断。此外，这个函数的调用会配置SysTick中断的优先级为最低的可能值，及15（或0xF），其原因与操作系统的调度有一定关系，在这里不过多解释。默认情况下，SysTick的时钟脉冲频率为72MHz，这也是SystemCoreClock这个宏展开后的值（即72000000），所以，配置计数器初值为SystemCoreClock / 1000即可使SysTick以1ms为周期触发中断。当然，在1ms内STM32大概能够执行$10^4$条指令，因此几乎无需担心SysTick中断不能在这段时间内处理完成。如果配置成功，调用SysTick\_Config()会返回0，否则返回非零值，因此我们需要判断这个返回值是多少，并在初始化失败的情况下让程序陷入死循环。这是因为SysTick是一个非常基本的器件，初始化失败往往意味着许多功能无法完成，甚至可能暗示芯片存在其他重大问题。
 
 
 
